@@ -1,15 +1,28 @@
 /*
- * @include GEOR_util.js
- * @include GEOR_waiter.js
- * @include OpenLayers/Format/JSON.js
+ * @include GeoExt/data/FeatureStore.js
+ * @include GeoExt/data/LayerRecord.js
+ * @include GeoExt/data/LayerStore.js
+ * @include OpenLayers/Layer/Markers.js
+ * @include OpenLayers/Marker.js
+ * @include OpenLayers/Map.js
+ * @include OpenLayers/Icon.js
  * @include OpenLayers/Request.js
+ * @include OpenLayers/Format/OWSCommon/v1_1_0.js
  * @include OpenLayers/Handler/Point.js
  * @include OpenLayers/Handler/Path.js
+ * @include GEOR.js
+ * @include GEOR_util.js
+ * @include GEOR_waiter.js
+ * @include GEOR_getfeatureinfo.js
+ * @include GEOR_ResultsPanel.js
+ * @include GEOR_selectfeature.js
+ * @include VIDAE.js
  *
  */
+
 Ext.namespace("GEOR.Addons");
 
-GEOR.Addons.Websol = Ext.extend(GEOR.Addons.Base, {
+GEOR.Addons.Vidae = Ext.extend(GEOR.Addons.Base, {
 
     /**
      * Property: map
@@ -18,28 +31,22 @@ GEOR.Addons.Websol = Ext.extend(GEOR.Addons.Base, {
     map: null,
 
     /**
+     * Property: layerStore
+     * {GeoExt.data.LayerStore} The application's layer store.
+     */
+    layerStore: null,
+
+    /**
+     * Property: layerRecord
+     * {GeoExt.data.LayerRecord} contains only layers queryable
+     */
+    layerRecord: null,
+
+    /**
      * Property: popup
      * {GeoExt.Popoup.} Display popup window.
      */
     popup: null,
-
-    /**
-     * Property: vectorLayer
-     * {OpenLayers.Layer.Vector} The vector layer on which we display results
-     */
-    vectorLayer: null,
-
-    /**
-     * Property: mask
-     * {Ext.LoadMask} the catalogue's keywords panel mask
-     */
-    mask: null,
-
-    /**
-     * Property: cnt
-     * {var} the number of responses
-     */
-    cnt: 0, 
 
     /**
      * Method: tr
@@ -61,28 +68,66 @@ GEOR.Addons.Websol = Ext.extend(GEOR.Addons.Base, {
             msg: tr("Loading...")
         }) ;
         map = this.map;
-//        console.log ("Liste des serveurs WEBSOL utilises : ") ; // debug infos
-        for (i=0 ; i < this.options.WEBSOL_SERVERS.length ; i++)	{
-//            console.log ("name="+this.options.WEBSOL_SERVERS[i].name+" / url="+this.options.WEBSOL_SERVERS[i].url+" / layers="+this.options.WEBSOL_SERVERS[i].layers) ;
-        } 
-        this.defControlGetUCS();
-        this.clickUCS = new OpenLayers.Control.Click();
-        this.map.addControl(this.clickUCS);
-        this.vectorLayer = this.createVectorLayer () ; 
-        this.map.addLayer (this.vectorLayer) ;
+        layerStore  = Ext.getCmp("mappanel").layers;
+        this.initVIDAELayers(layerStore, this.options.VIDAE_LAYERS) ;
+        this.defControlClickSensor();
+        this.clicksensor = new OpenLayers.Control.Click();
+        this.map.addControl(this.clicksensor);
+        var vidaeMenu =  new Ext.menu.Menu({
+            listeners: {
+                beforeshow: function () {
+                    (this.enableSelectionTool(map) == true) ? Ext.getCmp('showgraphfromselection').enable() : Ext.getCmp('showgraphfromselection').disable();
+                },
+                scope: this
+            },
+            items: [
+                new Ext.menu.CheckItem (new Ext.Action ({
+                    id: "clicksensor",
+                    iconCls: 'drawpoint',
+                    text: tr("vidae.selectsensor"),
+                    map: map,
+                    toggleGroup: 'map',
+                    enableToggle: true,
+                    allowDepress: true,
+                    tooltip: tr("vidae.selectsensortooltip"),
+                    handler: function () {
+                        if (this.layerRecord) {
+                            GEOR.getfeatureinfo.toggle(this.layerRecord, true);
+                            console.log ("in handler layerRecord OK") ;
+                        }else {
+                            GEOR.getfeatureinfo.toggle(false, true);
+                            console.log ("in handler layerRecord vide") ;
+                        }
+                    },
+                    scope: this
+                })),
+            {
+                text: tr("vidae.showgraph"),
+                handler: function () {
+                    this.showgraph(false);
+                },
+                scope: this
+            }, {
+                id: "showgraphfromselection",
+                text: tr("vidae.showgraphfromselection"),
+                iconCls: "geor-btn-metadata",
+                handler: function () {
+                    this.showgraph(true);
+                },
+                scope: this
+            }],
+            scope: this
+        })
 
         if (this.target) {
             // addon placed in toolbar
             this.components = this.target.insertButton(this.position, {
                 xtype: 'button',
-                enableToggle: true,
+//                enableToggle: true,
                 toggleGroup: 'map',
                 tooltip: this.getTooltip(record), 
-                iconCls: 'websol-icon',
-                listeners: {
-                    "toggle": this.onCheckchange,
-                    scope: this 
-                },
+                iconCls: 'vidae-icon',
+                menu: vidaeMenu, 
                 scope: this 
             });
             this.target.doLayout();
@@ -91,153 +136,280 @@ GEOR.Addons.Websol = Ext.extend(GEOR.Addons.Base, {
             this.item = new Ext.menu.CheckItem({
                 text: this.getText(record), 
                 qtip: this.getQtip(record),
-                iconCls: 'websol-icon',
-                listeners: {
-                    "checkchange": this.onCheckchange,
-                    scope: this 
-                },
+                iconCls: 'vidae-icon',
+                menu: vidaeMenu, 
                 scope: this 
             });
         }
     },
 
-    /**
-     * Method: createVectorLayer
-     *
-     * Returns:
-     * {OpenLayers.Layer.Vector}
-     */
-    createVectorLayer: function() {
-        var defStyle = OpenLayers.Util.extend({},
-            OpenLayers.Feature.Vector.style['default']);
-        var selStyle = OpenLayers.Util.extend({},
-            OpenLayers.Feature.Vector.style['select']);
-        var styleMap = new OpenLayers.StyleMap({
-            "default": new OpenLayers.Style(
-                OpenLayers.Util.extend(defStyle, {
-                    cursor: "pointer",
-                    fillOpacity: 0.1,
-                    strokeWidth: 3
-                })
-            ),
-            "select": new OpenLayers.Style(
-                OpenLayers.Util.extend(selStyle, {
-                    cursor: "pointer",
-                    strokeWidth: 3,
-                    fillOpacity: 0.1,
-                    graphicZIndex: 1000
-                })
-            )
-        });
-        return new OpenLayers.Layer.Vector("UCSLayer", {
-            displayInLayerSwitcher: false,
-            styleMap: styleMap,
-            rendererOptions: {
-                zIndexing: true
+    initVIDAELayers: function (ls,vl) {
+
+        console.log ("Liste des couches VIDAE : ") ; // debug infos
+        for (i=0 ; i < vl.length ; i++)	{
+            console.log ("    name="+vl[i].name+" / url="+vl[i].url+" / layers="+vl[i].layer) ;
+        } 
+        console.log ("Liste des couches affichées: ") ; // debug infos
+        var c = GEOR.util.createRecordType();
+        ls.each (function (record)  {
+            var layer = record.get('layer');
+            var layerName = record.get ('name') ;
+            var owsURL = record.get ('WFS_URL') ;
+            var queryable = record.get('queryable');
+            if (queryable) {
+                console.log ("    name="+layer.name+" / url="+owsURL+" / layers="+layerName) ;
+                for (i=0 ; i < vl.length ; i++)	{
+                    if (owsURL == vl[i].url && layerName == vl[i].layer) {
+                        console.log ("VIDAE OK    name="+layer.name+" / url="+owsURL+" / layers="+layerName) ;
+                        var record = new c({layer: layer, name: layerName, type: "WMS"});
+                        this.layerRecord = record.clone () ;
+                        if (this.layerRecord) {
+                            console.log ("ICI layerRecord OK") ;
+                        }else {
+                            console.log ("ICI layerRecord vide") ;
+                        }
+                    }    
+                }
             }
-        });
+        }) ;
     },
 
     /**
-     * Method: getUCS
-     * execute getUCS request on Websol server.
+     * Method: showgraph
+     * display graph
      *
+     * selection - {boolean} .
      */
-    getUCS: function(pt) {
-        var ptProj = pt ;
-        this.cnt = 0 ;
-        this.msg = tr ("websol.popup.body.NOK") ;
-        GEOR.waiter.show();
-        mask && mask.show () ;
-        this.popup && this.popup.destroy();
-        if (this.vectorLayer) {
-            this.vectorLayer.destroyFeatures() ;
-        }
-        ptProj = new OpenLayers.LonLat(pt.x,pt.y).transform( map.getProjection(), this.options.epsg);
-        console.log ("Pt map("+map.getProjection()+"): "+pt.x+" "+pt.y+" --> Pt websol("+this.options.epsg+"): "+ptProj.lon+" "+ptProj.lat) ;
-        for (i=0 ; i < this.options.WEBSOL_SERVERS.length ; i++)	{
-            var url = this.options.WEBSOL_SERVERS[i].url+"?lon="+ptProj.lon+"&lat="+ptProj.lat+"&format="+this.options.format+"&layers="+this.options.WEBSOL_SERVERS[i].layers+"&sld="+this.options.sld ;
-            this.msg += "- " + this.options.WEBSOL_SERVERS[i].name + "<br>";
-            Ext.Ajax.request({
-                url: url,
-                method: 'GET',
-                success: function(response) {
-                    if (response.responseText.indexOf("no_uc") == -1) {
-                        this.cnt++ ;
-                        if (this.cnt >= this.options.WEBSOL_SERVERS.length) { // Aucun serveur n'a retourne une unite cartographique
-                            this.popup = new GeoExt.Popup({
-                                map: this.map,
-                                title: tr ("websol.popup.title.NOK"),
-                                location: pt,
-                                anchorPosition: "top-left",
-                                collapsible: false,
-                                closable: true,
-                                unpinnable: false,
-                                buttons: [{
-                                    text: tr("OK"),
-                                    handler: function() {
-                                        this.popup.close();
-                                    },
-                                    scope: this
-                                }],
-                                html: this.msg,
-                                scope: this
-                            });
-                            mask && mask.hide();
-                            this.popup.show();
+    showgraph: function (selection) {
+        var tabField = new Array () ;
+        tabField = this.options.VIDAE_LAYERS[0].default_data_type ;
+        GEOR.waiter.show()
+        if (selection) {
+            var searchLayers = map.getLayersByName(/__georchestra_results_*/);
+            var filterLayers = map.getLayersByName('__georchestra_filterbuilder');
+            if (filterLayers.length > 0) {
+                if (filterLayers[0].features.length > 0) {
+                    console.log ("filterLayers[0].features.length="+filterLayers[0].features.length) ;
+                }
+
+            }
+            
+            if (searchLayers.length > 0) {
+                idLayer = searchLayers.length - 1;
+                console.log ("Search Layer OK in showgraph") ;
+                var selectedFeatures = searchLayers[idLayer].selectedFeatures;
+                var features = (selectedFeatures.length > 0)?selectedFeatures:searchLayers[idLayer].features;
+                console.log ("features.length="+features.length) ;
+                if (features.length > 0) {
+                    var tabPiezo = new Array (features.length) ;
+                    for (var i = 0; i < features.length; i++) {
+                        att = features[i].attributes ;
+                        for (var key in att) {
+                            if (!att.hasOwnProperty(key)) {
+                                continue;
+                            }
+                            if (key == this.options.VIDAE_LAYERS[0].join_field){
+                                tabPiezo[i] = att[key] ;
+                                console.log (this.options.VIDAE_LAYERS[0].join_field+"="+tabPiezo[i]) ;
+                            }
                         }
-                    }else{
-                        var json = Ext.util.JSON.decode(response.responseText) ;
-                        var geojsonFormat = new OpenLayers.Format.GeoJSON({
-                            'internalProjection': new OpenLayers.Projection(this.map.getProjection()),
-                            'externalProjection': new OpenLayers.Projection(this.options.epsg)
-                        }); 
-                        var html = json.properties["html"];
-                        this.vectorLayer.addFeatures(geojsonFormat.read(json));
-                        this.popup = new GeoExt.Popup({
-                            map: this.map,
-                            title: tr ("websol.popup.title.OK")+json.id,
-                            location: pt,
-                            width: 600,
-                            height: 400,
-                            anchorPosition: "top-left",
-                            autoScroll: true,
-                            closeAction: "hide",
-                             collapsible: false,
-                            closable: true,
-                            unpinnable: false,
-                            buttons: [{
-                                text: tr("OK"),
-                                handler: function() {
-                                    this.popup.close();
-                                    this.vectorLayer.destroyFeatures() ;
-                                },
-                                scope: this
-                            }],
-                            listeners: {
-                                "hide": function() {
-                                    this.vectorLayer.destroyFeatures() ;
-                                },
-                                scope: this
-                            },
-                            html: html,
-                            scope: this
-                        });
-                        mask && mask.hide();
-                        this.popup.show();
                     }
-                },
-                scope: this
-            });
+                }
+            }
+        } else {
+            var default_piezo = (this.options.VIDAE_LAYERS[0].default_sensor_id==null)?[1]:this.options.VIDAE_LAYERS[0].default_sensor_id ;
+            var tabPiezo = default_piezo ;
+        };
+        console.log ("displayVIDAE ("+tabPiezo+","+tabField+")") ;
+        displayVIDAE (tabPiezo, tabField) ;
+    }, 
+
+    /**
+     * Method: enableSelectionTool
+     *
+     * Retourne true si une selection est effectuee dans le Panel Results
+     * Parameters:
+     * m - {OpenLayers.Map} The map instance.
+     */
+    enableSelectionTool: function (m) {
+        var response = false;
+        var searchLayers = map.getLayersByName(/__georchestra_results_*/);
+        console.log ("searchLayers.length="+searchLayers.length);
+        console.log ("searchLayers.name="+searchLayers.name);
+        if (searchLayers.length > 0) {
+            idLayer = searchLayers.length - 1;
+            console.log ("Search Layer OK in enableSelectionTool") ;
+            var features = searchLayers[idLayer].features;
+            var selectedFeatures = searchLayers[idLayer].selectedFeatures;
+            if (features.length > 0 || selectedFeatures.length > 0) {
+                response = true;
+            }
+        }else{
+            console.log ("Search Layer vide") ;
         }
+        return response;
+    },
+
+    /**
+     * Method: showgraph
+     * display graph
+     *
+     * selection - {boolean} .
+     */
+    showgraph: function (selection) {
+        var tabField = new Array () ;
+        tabField = this.options.VIDAE_LAYERS[0].default_data_type ;
+        GEOR.waiter.show()
+        if (selection) {
+            var searchLayers = map.getLayersByName(/__georchestra_results_*/);
+            var filterLayers = map.getLayersByName('__georchestra_filterbuilder');
+            if (filterLayers.length > 0) {
+                if (filterLayers[0].features.length > 0) {
+                    console.log ("filterLayers[0].features.length="+filterLayers[0].features.length) ;
+                }
+
+            }
+            
+            if (searchLayers.length > 0) {
+                idLayer = searchLayers.length - 1;
+                console.log ("Search Layer OK in showgraph") ;
+                var selectedFeatures = searchLayers[idLayer].selectedFeatures;
+                var features = (selectedFeatures.length > 0)?selectedFeatures:searchLayers[idLayer].features;
+                console.log ("features.length="+features.length) ;
+                if (features.length > 0) {
+                    var tabPiezo = new Array (features.length) ;
+                    for (var i = 0; i < features.length; i++) {
+                        att = features[i].attributes ;
+                        for (var key in att) {
+                            if (!att.hasOwnProperty(key)) {
+                                continue;
+                            }
+                            if (key == this.options.VIDAE_LAYERS[0].join_field){
+                                tabPiezo[i] = att[key] ;
+                                console.log (this.options.VIDAE_LAYERS[0].join_field+"="+tabPiezo[i]) ;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            var default_piezo = (this.options.VIDAE_LAYERS[0].default_sensor_id==null)?[1]:this.options.VIDAE_LAYERS[0].default_sensor_id ;
+            var tabPiezo = default_piezo ;
+        };
+        console.log ("displayVIDAE ("+tabPiezo+","+tabField+")") ;
+        displayVIDAE (tabPiezo, tabField) ;
+    }, 
+
+    /**
+     * Method: enableSelectionTool
+     *
+     * Retourne true si une selection est effectuee dans le Panel Results
+     * Parameters:
+     * m - {OpenLayers.Map} The map instance.
+     */
+    enableSelectionTool: function (m) {
+        var response = false;
+        var searchLayers = map.getLayersByName(/__georchestra_results_*/);
+        console.log ("searchLayers.length="+searchLayers.length);
+        console.log ("searchLayers.name="+searchLayers.name);
+        if (searchLayers.length > 0) {
+            idLayer = searchLayers.length - 1;
+            console.log ("Search Layer OK in enableSelectionTool") ;
+            var features = searchLayers[idLayer].features;
+            var selectedFeatures = searchLayers[idLayer].selectedFeatures;
+            if (features.length > 0 || selectedFeatures.length > 0) {
+                response = true;
+            }
+        }else{
+            console.log ("Search Layer vide") ;
+        }
+        return response;
+    },
+
+    /**
+     * Method: showgraph
+     * display graph
+     *
+     * selection - {boolean} .
+     */
+    showgraph: function (selection) {
+        var tabField = new Array () ;
+        tabField = this.options.VIDAE_LAYERS[0].default_data_type ;
+        GEOR.waiter.show()
+        if (selection) {
+            var searchLayers = map.getLayersByName(/__georchestra_results_*/);
+            var filterLayers = map.getLayersByName('__georchestra_filterbuilder');
+            if (filterLayers.length > 0) {
+                if (filterLayers[0].features.length > 0) {
+                    console.log ("filterLayers[0].features.length="+filterLayers[0].features.length) ;
+                }
+
+            }
+            
+            if (searchLayers.length > 0) {
+                idLayer = searchLayers.length - 1;
+                console.log ("Search Layer OK in showgraph") ;
+                var selectedFeatures = searchLayers[idLayer].selectedFeatures;
+                var features = (selectedFeatures.length > 0)?selectedFeatures:searchLayers[idLayer].features;
+                console.log ("features.length="+features.length) ;
+                if (features.length > 0) {
+                    var tabPiezo = new Array (features.length) ;
+                    for (var i = 0; i < features.length; i++) {
+                        att = features[i].attributes ;
+                        for (var key in att) {
+                            if (!att.hasOwnProperty(key)) {
+                                continue;
+                            }
+                            if (key == this.options.VIDAE_LAYERS[0].join_field){
+                                tabPiezo[i] = att[key] ;
+                                console.log (this.options.VIDAE_LAYERS[0].join_field+"="+tabPiezo[i]) ;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            var default_piezo = (this.options.VIDAE_LAYERS[0].default_sensor_id==null)?[1]:this.options.VIDAE_LAYERS[0].default_sensor_id ;
+            var tabPiezo = default_piezo ;
+        };
+        console.log ("displayVIDAE ("+tabPiezo+","+tabField+")") ;
+        displayVIDAE (tabPiezo, tabField) ;
+    }, 
+
+    /**
+     * Method: enableSelectionTool
+     *
+     * Retourne true si une selection est effectuee dans le Panel Results
+     * Parameters:
+     * m - {OpenLayers.Map} The map instance.
+     */
+    enableSelectionTool: function (m) {
+        var response = false;
+        var searchLayers = map.getLayersByName(/__georchestra_results_*/);
+        console.log ("searchLayers.length="+searchLayers.length);
+        console.log ("searchLayers.name="+searchLayers.name);
+        if (searchLayers.length > 0) {
+            idLayer = searchLayers.length - 1;
+            console.log ("Search Layer OK in enableSelectionTool") ;
+            var features = searchLayers[idLayer].features;
+            var selectedFeatures = searchLayers[idLayer].selectedFeatures;
+            if (features.length > 0 || selectedFeatures.length > 0) {
+                response = true;
+            }
+        }else{
+            console.log ("Search Layer vide") ;
+        }
+        return response;
     },
 
     /**
      * Method: defControlGetUCS
-     * define Control 
      *
+     * Retourne true si une selection est effectuee dans le Panel Results
+     * Parameters:
+     * m - {OpenLayers.Map} The map instance.
      */
-    defControlGetUCS: function () {
+    defControlClickSensor: function () {
         addon = this ;
         OpenLayers.Control.Click = OpenLayers.Class(OpenLayers.Control, {
             defaultHandlerOptions: {
@@ -258,7 +430,6 @@ GEOR.Addons.Websol = Ext.extend(GEOR.Addons.Base, {
                 );
             },
             trigger: function (pt) {
-                addon.getUCS(pt);
             },
             scope: this
         });
@@ -270,13 +441,12 @@ GEOR.Addons.Websol = Ext.extend(GEOR.Addons.Base, {
      */     
     onCheckchange: function(item, checked) {
         if (checked) {
-            GEOR.helper.msg("WebSol",
-                OpenLayers.i18n("websol.helper.msg")) ;
-            this.clickUCS.activate();
+            GEOR.helper.msg("Vidae",
+                OpenLayers.i18n("vidae.helper.msg")) ;
+            this.clicksensor.activate();
         } else {
-            this.clickUCS.deactivate();
+            this.clicksensor.deactivate();
             if (this.vectorLayer) {
-                this.vectorLayer.destroyFeatures() ;
             }
             if (this.popup) {
                 this.popup.hide();
@@ -285,12 +455,12 @@ GEOR.Addons.Websol = Ext.extend(GEOR.Addons.Base, {
     },
 
     destroy: function() {        
-       this.clickUCS.deactivate();
-       this.clickUCS.destroy();
-       this.popup.hide();
-       this.popup = null;
-       this.map.removeLayer (this.vectorLayer) ;
-       this.vectorLayer = null;
+       this.clicksensor.deactivate();
+       this.clicksensor.destroy();
+       if (this.popup) {
+           this.popup.hide();
+           this.popup = null;
+       }
        this.map = null;
        GEOR.Addons.Base.prototype.destroy.call(this);
     }

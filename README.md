@@ -1,7 +1,7 @@
-WEBSOL ADDON
+VIDAE ADDON
 ============ 
 
-This addon allows users to query several regional WEBSOL servers in one click.
+This addon allows users to display and download temporal datas from Environment Research Observatories.
 
 author:@hsquividant.
 
