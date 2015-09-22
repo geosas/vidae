@@ -28,7 +28,7 @@ Example addon config to include in your GEOR_custom.js file:
         },
        "preloaded": "true",
         "options": {
-            "target": "tbar_11" // Websol button in toolbar.
+            "target": "tbar_11" // VIDAE button in toolbar.
         }
     }
 ```
@@ -38,17 +38,17 @@ another example of addon config to query AgrHys AND Aicha database :
 
 ```json
     {
-        "id": "websol", 
-        "name": "Websol",
+        "id": "vidae", // unique & stable string identifier for this addon instance
+        "name": "Vidae",
         "title": {
-            "en": "WebSol",
-            "es": "WebSol",
-            "fr": "WebSol"
+            "en": "VIDAE",
+            "es": "VIDAE",
+            "fr": "VIDAE"
         },
         "description": {
-            "en": "A tool which allow to query Soil database",
-            "es": "Un outil qui permet d'interroger les unités cartographiques de sol provenant des référentiels régionaux pedologiques",
-            "fr": "Un outil qui permet d'interroger les unités cartographiques de sol provenant des référentiels régionaux pedologiques"
+            "en": "Un outil qui permet de visualiser les chroniques des points de mesure l'ORE AgrHys",
+            "es": "Un outil qui permet de visualiser les chroniques des points de mesure l'ORE AgrHys",
+            "fr": "Un outil qui permet de visualiser les chroniques des points de mesure l'ORE AgrHys"
         },
         "options": {
             "VIDAE_LAYERS": [
