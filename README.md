@@ -14,33 +14,27 @@ Example addon config to include in your GEOR_custom.js file:
 
 ```json
     {
-        "id": "websol",
-        "name": "Websol",
+        "id": "vidae", // unique & stable string identifier for this addon instance
+        "name": "Vidae",
         "title": {
-            "en": "WebSol",
-            "es": "WebSol",
-            "fr": "WebSol"
+            "en": "VIDAE",
+            "es": "VIDAE",
+            "fr": "VIDAE"
         },
         "description": {
-            "en": "A tool which allow to query Soil database",
-            "es": "Un outil qui permet d'interroger les unités cartographiques de sol provenant des référentiels régionaux pedologiques",
-            "fr": "Un outil qui permet d'interroger les unités cartographiques de sol provenant des référentiels régionaux pedologiques"
+            "en": "Un outil qui permet de visualiser les chroniques des points de mesure l'ORE AgrHys",
+            "es": "Un outil qui permet de visualiser les chroniques des points de mesure l'ORE AgrHys",
+            "fr": "Un outil qui permet de visualiser les chroniques des points de mesure l'ORE AgrHys"
         },
-        "preloaded": "true",
+       "preloaded": "true",
         "options": {
-            "target": "tbar_11", 
-            "WEBSOL_SERVERS": [
-                {"name": "Bretagne", "url": "http://websoltest.agrocampus-ouest.fr/webservice/getUCS", "layers":"25035,25022,25029,25056"},
-                {"name": "Bourgogne", "url": "http://bourgogne.websol.fr/webservice/getUCS", "layers": "25021,25058,25071,25089"},
-                {"name": "Rhone-Alpes", "url": "http://rhone-alpes.websol.fr/webservice/getUCS", "layers": "69250,42250,26250,7250"},
-                {"name": "Alsace", "url": "http://alsace.websol.fr/webservice/getUCS", "layers": "31372,30146"}
-            ]
+            "target": "tbar_11" // Websol button in toolbar.
         }
     }
 ```
 
 
-another example of addon config to query only Alsace soil database :
+another example of addon config to query AgrHys AND Aicha database :
 
 ```json
     {
@@ -57,25 +51,11 @@ another example of addon config to query only Alsace soil database :
             "fr": "Un outil qui permet d'interroger les unités cartographiques de sol provenant des référentiels régionaux pedologiques"
         },
         "options": {
-            "WEBSOL_SERVERS": [
-                {"name": "Alsace", "url": "http://alsace.websol.fr/webservice/getUCS", "layers": "31372,30146"}
+            "VIDAE_LAYERS": [
+                {"name": "AgrHys", "url": "http://geowww.agrocampus-ouest.fr/geoserver/wfs?", "layer": "ore:pointdemesure", "join_field": "location_id", "default_sensor_id": [55], "default_data_type": [102,103]},
+                {"name": "Aicha", "url": "http://geoxxx.agrocampus-ouest.fr/geoserverwps/wfs?" , "layer": "aicha:Berambadi_Monitoring_Borewell_Locations", "join_field": "location_id", "default_sensor_id": [1,3], "default_data_type": [102,103]}
             ]
         }
     }
 ```
 
-Proxy
------
-
-Due to the content type returned by websol servers, you have to add a new entry in proxy config :
- * **geOrchestra Security-proxy** : in .../georchestra/security-proxy/src/main/filtered-resources/WEB-INF/proxy-servlet.xml insert line 35 :
-```json
-<value>text/html</value> 
-```
-or
- * **mapfishapp embededed proxy** : in .../georchestra/mapfishapp/src/main/java/org/georchestra/mapfishapp/ws/OGCProxy.java  insert line 59 :
-
-```json
-"text/html", 
-```
-   
