@@ -1,0 +1,16 @@
+[{
+        "id": "vidae", // unique & stable string identifier for this addon instance
+        "name": "Vidae",
+        "enabled": true,
+        "title": {
+            "en": "VIDAE",
+            "es": "VIDAE",
+            "fr": "VIDAE"
+        },
+        "description": {
+            "fr": "Un outil qui permet de visualiser les chroniques associées à des points de mesure",
+            "en": "Un outil qui permet de visualiser les chroniques associées à des points de mesure",
+            "es": "Un outil qui permet de visualiser les chroniques associées à des points de mesure"
+        }
+}]
+
